@@ -27,20 +27,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DocumentScanner
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Phone
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.SpaceDashboard
 import androidx.compose.material.icons.outlined.SettingsSuggest
 import androidx.compose.material.icons.outlined.SimCard
 import androidx.compose.material.icons.outlined.Upload
@@ -52,6 +55,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -61,7 +66,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -93,6 +97,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+private data class HomeTab(
+    val label: String,
+    val icon: ImageVector,
+)
 
 @Immutable
 data class AppUiState(
@@ -261,6 +270,15 @@ class MainActivity : ComponentActivity() {
                 var expandedOfferId by rememberSaveable { mutableStateOf<String?>(null) }
                 var showTestLab by rememberSaveable { mutableStateOf(false) }
                 var showCustomOffer by rememberSaveable { mutableStateOf(false) }
+                var currentTab by rememberSaveable { mutableStateOf(0) }
+                val tabs = remember {
+                    listOf(
+                        HomeTab("Dashboard", Icons.Outlined.SpaceDashboard),
+                        HomeTab("Setup", Icons.Outlined.PhoneAndroid),
+                        HomeTab("Detection", Icons.Outlined.DocumentScanner),
+                        HomeTab("Bundles", Icons.Outlined.Layers),
+                    )
+                }
 
                 val filteredOffers by remember(uiState.offers, catalogSearch, catalogTypeFilter) {
                     derivedStateOf {
@@ -306,190 +324,193 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Scaffold(
                         containerColor = Color.Transparent,
+                        bottomBar = {
+                            NavigationBar(
+                                containerColor = MaterialTheme.colorScheme.background,
+                            ) {
+                                tabs.forEachIndexed { index, tab ->
+                                    NavigationBarItem(
+                                        selected = index == currentTab,
+                                        onClick = { currentTab = index },
+                                        icon = {
+                                            Icon(tab.icon, contentDescription = tab.label)
+                                        },
+                                        label = { Text(tab.label) },
+                                    )
+                                }
+                            }
+                        },
                     ) { padding ->
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(padding)
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            item {
-                                HeroCard(
-                                    jobCount = uiState.jobs.size,
-                                    activeOffers = uiState.offers.count { it.active && it.ussdCode.isNotBlank() },
-                                    successCount = uiState.jobs.count { it.status == JobStatus.SUCCESS },
-                                    delaySeconds = uiState.settings.fulfillmentDelaySeconds,
-                                )
-                            }
-
-                            item {
-                                PermissionCard(
-                                    smsGranted = hasPermission(Manifest.permission.RECEIVE_SMS),
-                                    callGranted = hasPermission(Manifest.permission.CALL_PHONE),
-                                    accessibilityEnabled = isAccessibilityEnabled(),
-                                    onGrantSms = {
-                                        smsPermissionLauncher.launch(
-                                            arrayOf(
-                                                Manifest.permission.RECEIVE_SMS,
-                                                Manifest.permission.READ_SMS,
-                                                Manifest.permission.POST_NOTIFICATIONS,
-                                            ),
+                        when (currentTab) {
+                            0 -> TabContent(modifier = Modifier.padding(padding)) {
+                                item {
+                                    HeroCard(
+                                        jobCount = uiState.jobs.size,
+                                        activeOffers = uiState.offers.count { it.active && it.ussdCode.isNotBlank() },
+                                        successCount = uiState.jobs.count { it.status == JobStatus.SUCCESS },
+                                        delaySeconds = uiState.settings.fulfillmentDelaySeconds,
+                                    )
+                                }
+                                item {
+                                    HowItWorksCard()
+                                }
+                                if (uiState.jobs.isEmpty()) {
+                                    item {
+                                        EmptyJobsCard()
+                                    }
+                                } else {
+                                    items(uiState.jobs, key = { it.id }) { job ->
+                                        JobCard(
+                                            job = job,
+                                            onRun = { viewModel.runJob(context, job.id) },
                                         )
-                                    },
-                                    onGrantCall = {
-                                        callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
-                                    },
-                                    onOpenAccessibility = {
-                                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                                    },
-                                )
-                            }
-
-                            item {
-                                SettingsCard(
-                                    settings = uiState.settings,
-                                    onSaveSettings = viewModel::saveSettings,
-                                )
-                            }
-
-                            item {
-                                CollapsibleToolsCard(
-                                    title = "Quick USSD Test",
-                                    subtitle = "Open this only when you want to test dialing on this phone.",
-                                    expanded = showTestLab,
-                                    onToggle = { showTestLab = !showTestLab },
-                                ) {
-                                    TestLabCard(
-                                        ussdCode = testUssd,
-                                        message = testMessage,
-                                        preferredSimSlot = uiState.settings.preferredSimSlot,
-                                        onUssdChange = { testUssd = it },
-                                        onRun = { simSlot ->
-                                            val normalized = testUssd.trim()
-                                            if (normalized.isBlank()) {
-                                                testMessage = "Enter a USSD code first."
-                                            } else {
-                                                viewModel.runTestUssd(context, normalized, simSlot)
-                                                val label = when (simSlot) {
-                                                    1 -> "SIM 1"
-                                                    2 -> "SIM 2"
-                                                    else -> "Auto"
-                                                }
-                                                testMessage = "Test launch sent using $label routing."
-                                            }
+                                    }
+                                }
+                                item {
+                                    CreditsCard(
+                                        onOpenGithub = {
+                                            startActivity(
+                                                Intent(
+                                                    Intent.ACTION_VIEW,
+                                                    Uri.parse("https://github.com/GingerBreadSketchy"),
+                                                ),
+                                            )
+                                        },
+                                        onDonate = {
+                                            startActivity(
+                                                Intent(
+                                                    Intent.ACTION_VIEW,
+                                                    Uri.parse("https://gingerpay.vercel.app"),
+                                                ),
+                                            )
                                         },
                                     )
                                 }
                             }
 
-                            item {
-                                CollapsibleToolsCard(
-                                    title = "Add Your Own Bundle",
-                                    subtitle = "Open this only when you want to add a new bundle manually.",
-                                    expanded = showCustomOffer,
-                                    onToggle = { showCustomOffer = !showCustomOffer },
-                                ) {
-                                    CustomOfferCard(
-                                        onAdd = viewModel::addOffer,
+                            1 -> TabContent(modifier = Modifier.padding(padding)) {
+                                item {
+                                    PermissionCard(
+                                        smsGranted = hasPermission(Manifest.permission.RECEIVE_SMS),
+                                        callGranted = hasPermission(Manifest.permission.CALL_PHONE),
+                                        accessibilityEnabled = isAccessibilityEnabled(),
+                                        onGrantSms = {
+                                            smsPermissionLauncher.launch(
+                                                arrayOf(
+                                                    Manifest.permission.RECEIVE_SMS,
+                                                    Manifest.permission.READ_SMS,
+                                                    Manifest.permission.POST_NOTIFICATIONS,
+                                                ),
+                                            )
+                                        },
+                                        onGrantCall = {
+                                            callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
+                                        },
+                                        onOpenAccessibility = {
+                                            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                        },
+                                    )
+                                }
+                                item {
+                                    CollapsibleToolsCard(
+                                        title = "Quick USSD Test",
+                                        subtitle = "Open this only when you want to test dialing on this phone.",
+                                        expanded = showTestLab,
+                                        onToggle = { showTestLab = !showTestLab },
+                                    ) {
+                                        TestLabCard(
+                                            ussdCode = testUssd,
+                                            message = testMessage,
+                                            preferredSimSlot = uiState.settings.preferredSimSlot,
+                                            onUssdChange = { testUssd = it },
+                                            onRun = { simSlot ->
+                                                val normalized = testUssd.trim()
+                                                if (normalized.isBlank()) {
+                                                    testMessage = "Enter a USSD code first."
+                                                } else {
+                                                    viewModel.runTestUssd(context, normalized, simSlot)
+                                                    val label = when (simSlot) {
+                                                        1 -> "SIM 1"
+                                                        2 -> "SIM 2"
+                                                        else -> "Auto"
+                                                    }
+                                                    testMessage = "Test launch sent using $label routing."
+                                                }
+                                            },
+                                        )
+                                    }
+                                }
+                            }
+
+                            2 -> TabContent(modifier = Modifier.padding(padding)) {
+                                item {
+                                    SettingsCard(
+                                        settings = uiState.settings,
+                                        onSaveSettings = viewModel::saveSettings,
                                     )
                                 }
                             }
 
-                            item {
-                                SectionHeader(
-                                    title = "Bundles",
-                                    subtitle = "Search your bundles, adjust USSD codes, or restore the built-in list.",
-                                    trailingLabel = "Restore Default List",
-                                    onTrailingClick = {
-                                        viewModel.resetOffers()
-                                        catalogMessage = "Default bundle list restored."
-                                    },
-                                )
-                            }
-
-                            item {
-                                CatalogToolsCard(
-                                    search = catalogSearch,
-                                    selectedType = catalogTypeFilter,
-                                    message = catalogMessage,
-                                    onSearchChange = { catalogSearch = it },
-                                    onTypeChange = { catalogTypeFilter = it },
-                                    onExport = {
-                                        exportLauncher.launch("bingwa-offers.json")
-                                    },
-                                    onImport = {
-                                        importLauncher.launch(arrayOf("application/json", "text/plain"))
-                                    },
-                                )
-                            }
-
-                            items(filteredOffers, key = { it.id }) { offer ->
-                                OfferCard(
-                                    offer = offer,
-                                    expanded = expandedOfferId == offer.id,
-                                    onToggleExpand = {
-                                        expandedOfferId = if (expandedOfferId == offer.id) null else offer.id
-                                    },
-                                    onSave = viewModel::saveOffer,
-                                    onToggleActive = { viewModel.toggleOfferActive(offer.id) },
-                                    onRemove = if (offer.id.startsWith("custom_")) {
-                                        { viewModel.removeOffer(offer.id) }
-                                    } else {
-                                        null
-                                    },
-                                )
-                            }
-
-                            if (filteredOffers.isEmpty()) {
+                            else -> TabContent(modifier = Modifier.padding(padding)) {
                                 item {
-                                    EmptyCatalogCard()
-                                }
-                            }
-
-                            item {
-                                SectionHeader(
-                                    title = "Recent Activity",
-                                    subtitle = "Your latest matched payments and bundle purchases.",
-                                )
-                            }
-
-                            if (uiState.jobs.isEmpty()) {
-                                item {
-                                    EmptyJobsCard()
-                                }
-                            } else {
-                                items(uiState.jobs, key = { it.id }) { job ->
-                                    JobCard(
-                                        job = job,
-                                        onRun = { viewModel.runJob(context, job.id) },
+                                    CatalogToolsCard(
+                                        search = catalogSearch,
+                                        selectedType = catalogTypeFilter,
+                                        message = catalogMessage,
+                                        onSearchChange = { catalogSearch = it },
+                                        onTypeChange = { catalogTypeFilter = it },
+                                        onExport = {
+                                            exportLauncher.launch("bingwa-offers.json")
+                                        },
+                                        onImport = {
+                                            importLauncher.launch(arrayOf("application/json", "text/plain"))
+                                        },
                                     )
                                 }
-                            }
-
-                            item {
-                                CreditsCard(
-                                    onOpenGithub = {
-                                        startActivity(
-                                            Intent(
-                                                Intent.ACTION_VIEW,
-                                                Uri.parse("https://github.com/GingerBreadSketchy"),
-                                            ),
+                                item {
+                                    CollapsibleToolsCard(
+                                        title = "Add Your Own Bundle",
+                                        subtitle = "Open this only when you want to add a new bundle manually.",
+                                        expanded = showCustomOffer,
+                                        onToggle = { showCustomOffer = !showCustomOffer },
+                                    ) {
+                                        CustomOfferCard(
+                                            onAdd = viewModel::addOffer,
                                         )
-                                    },
-                                    onDonate = {
-                                        startActivity(
-                                            Intent(
-                                                Intent.ACTION_VIEW,
-                                                Uri.parse("https://gingerpay.vercel.app"),
-                                            ),
-                                        )
-                                    },
-                                )
-                            }
-
-                            item {
-                                Spacer(Modifier.height(12.dp))
+                                    }
+                                }
+                                item {
+                                    SectionHeader(
+                                        title = "Bundles",
+                                        subtitle = "Search your bundles, adjust USSD codes, or restore the built-in list.",
+                                        trailingLabel = "Restore Default List",
+                                        onTrailingClick = {
+                                            viewModel.resetOffers()
+                                            catalogMessage = "Default bundle list restored."
+                                        },
+                                    )
+                                }
+                                items(filteredOffers, key = { it.id }) { offer ->
+                                    OfferCard(
+                                        offer = offer,
+                                        expanded = expandedOfferId == offer.id,
+                                        onToggleExpand = {
+                                            expandedOfferId = if (expandedOfferId == offer.id) null else offer.id
+                                        },
+                                        onSave = viewModel::saveOffer,
+                                        onToggleActive = { viewModel.toggleOfferActive(offer.id) },
+                                        onRemove = if (offer.id.startsWith("custom_")) {
+                                            { viewModel.removeOffer(offer.id) }
+                                        } else {
+                                            null
+                                        },
+                                    )
+                                }
+                                if (filteredOffers.isEmpty()) {
+                                    item {
+                                        EmptyCatalogCard()
+                                    }
+                                }
                             }
                         }
                     }
@@ -507,6 +528,20 @@ class MainActivity : ComponentActivity() {
         val serviceId = ComponentName(this, ke.co.bingwa.companion.automation.BingwaAccessibilityService::class.java).flattenToString()
         return enabled.contains(serviceId, ignoreCase = true)
     }
+}
+
+@Composable
+private fun TabContent(
+    modifier: Modifier = Modifier,
+    content: LazyListScope.() -> Unit,
+) {
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -558,7 +593,7 @@ private fun HeroCard(
                         shape = CircleShape,
                     ) {
                         Icon(
-                            Icons.Outlined.DarkMode,
+                            Icons.Outlined.AutoAwesome,
                             contentDescription = null,
                             modifier = Modifier.padding(12.dp),
                             tint = MaterialTheme.colorScheme.primary,
@@ -575,6 +610,52 @@ private fun HeroCard(
                     StatChip("Active USSD", activeOffers.toString())
                     StatChip("Successes", successCount.toString())
                     StatChip("Delay", "${delaySeconds}s")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HowItWorksCard() {
+    val steps = listOf(
+        "Payment SMS arrives on your phone",
+        "App matches it to an active bundle offer",
+        "USSD code is dialled after the configured delay",
+        "Accessibility service handles any menu replies",
+    )
+
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
+        Column(
+            modifier = Modifier.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            steps.forEachIndexed { index, step ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(6.dp),
+                    ) {
+                        Text(
+                            text = (index + 1).toString(),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Text(
+                        text = step,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (index < steps.lastIndex) {
+                    HorizontalDivider()
                 }
             }
         }
@@ -606,7 +687,7 @@ private fun PermissionCard(
     onGrantCall: () -> Unit,
     onOpenAccessibility: () -> Unit,
 ) {
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -646,7 +727,7 @@ private fun PermissionRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Surface(color = MaterialTheme.colorScheme.surface, shape = CircleShape) {
+                Surface(color = MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(10.dp)) {
                     Icon(
                         icon,
                         contentDescription = null,
@@ -663,7 +744,7 @@ private fun PermissionRow(
                     )
                 }
             }
-            Button(onClick = onClick, shape = RoundedCornerShape(16.dp)) {
+            Button(onClick = onClick, shape = RoundedCornerShape(8.dp)) {
                 Text(if (granted) "Manage" else "Allow")
             }
         }
@@ -680,7 +761,7 @@ private fun SettingsCard(
     var showAdvanced by rememberSaveable { mutableStateOf(false) }
     val isDirty = draft != settings
 
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -815,7 +896,7 @@ private fun SettingsCard(
                 OutlinedButton(
                     onClick = { draft = settings },
                     enabled = isDirty,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(8.dp),
                 ) {
                     Text("Reset")
                 }
@@ -823,7 +904,7 @@ private fun SettingsCard(
                 Button(
                     onClick = { onSaveSettings(draft) },
                     enabled = isDirty,
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(8.dp),
                 ) {
                     Text("Save")
                 }
@@ -838,7 +919,12 @@ private fun SimChoiceChip(
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    FilterChip(selected = selected, onClick = onClick, label = { Text(label) })
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        shape = RoundedCornerShape(6.dp),
+        label = { Text(label) },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -850,7 +936,7 @@ private fun CollapsibleToolsCard(
     onToggle: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -896,13 +982,13 @@ private fun TestLabCard(
             supportingText = { Text("The app will dial this exactly as written here.") },
         )
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { onRun(0) }, shape = RoundedCornerShape(16.dp)) {
+            OutlinedButton(onClick = { onRun(0) }, shape = RoundedCornerShape(8.dp)) {
                 Text(if (preferredSimSlot == 0) "Run Auto / Preferred" else "Run Auto")
             }
-            OutlinedButton(onClick = { onRun(1) }, shape = RoundedCornerShape(16.dp)) {
+            OutlinedButton(onClick = { onRun(1) }, shape = RoundedCornerShape(8.dp)) {
                 Text("Test SIM 1")
             }
-            OutlinedButton(onClick = { onRun(2) }, shape = RoundedCornerShape(16.dp)) {
+            OutlinedButton(onClick = { onRun(2) }, shape = RoundedCornerShape(8.dp)) {
                 Text("Test SIM 2")
             }
         }
@@ -969,7 +1055,7 @@ private fun CustomOfferCard(
                     draft = OfferDraft(type = draft.type)
                     helperText = "Form cleared."
                 },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(8.dp),
             ) {
                 Text("Clear")
             }
@@ -984,7 +1070,7 @@ private fun CustomOfferCard(
                         "Please add a name, price, and USSD code."
                     }
                 },
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(8.dp),
             ) {
                 Text("Add Bundle")
             }
@@ -1003,7 +1089,7 @@ private fun CatalogToolsCard(
     onExport: () -> Unit,
     onImport: () -> Unit,
 ) {
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -1021,18 +1107,19 @@ private fun CatalogToolsCard(
                     FilterChip(
                         selected = selectedType == value,
                         onClick = { onTypeChange(value) },
+                        shape = RoundedCornerShape(6.dp),
                         label = { Text(label) },
                     )
                 }
             }
             Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = onImport, shape = RoundedCornerShape(16.dp)) {
+                OutlinedButton(onClick = onImport, shape = RoundedCornerShape(8.dp)) {
                     Icon(Icons.Outlined.Upload, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Import List")
                 }
-                OutlinedButton(onClick = onExport, shape = RoundedCornerShape(16.dp)) {
+                OutlinedButton(onClick = onExport, shape = RoundedCornerShape(8.dp)) {
                     Icon(Icons.Outlined.Download, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Export List")
@@ -1112,7 +1199,7 @@ private fun OfferCard(
     }
     val isDirty = ussdDraft != offer.ussdCode || normalizedReplies != offer.replySequence
 
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1134,6 +1221,7 @@ private fun OfferCard(
                     FilterChip(
                         selected = offer.active,
                         onClick = onToggleActive,
+                        shape = RoundedCornerShape(6.dp),
                         label = { Text(if (offer.active) "Active" else "Paused") },
                     )
                     if (onRemove != null) {
@@ -1165,7 +1253,7 @@ private fun OfferCard(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Spacer(Modifier.width(10.dp))
-                OutlinedButton(onClick = onToggleExpand, shape = RoundedCornerShape(16.dp)) {
+                OutlinedButton(onClick = onToggleExpand, shape = RoundedCornerShape(8.dp)) {
                     Text(if (expanded) "Close" else "Edit")
                 }
             }
@@ -1197,7 +1285,7 @@ private fun OfferCard(
                             replyText = offer.replySequence.joinToString(",")
                         },
                         enabled = isDirty,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(8.dp),
                     ) {
                         Text("Reset")
                     }
@@ -1212,7 +1300,7 @@ private fun OfferCard(
                             )
                         },
                         enabled = isDirty,
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(8.dp),
                     ) {
                         Text("Save Offer")
                     }
@@ -1229,7 +1317,7 @@ private fun InfoPill(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
-        shape = RoundedCornerShape(999.dp),
+        shape = RoundedCornerShape(6.dp),
     ) {
         Text(
             "$label: $value",
@@ -1241,7 +1329,7 @@ private fun InfoPill(
 
 @Composable
 private fun EmptyCatalogCard() {
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1257,7 +1345,7 @@ private fun EmptyCatalogCard() {
 
 @Composable
 private fun EmptyJobsCard() {
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1276,7 +1364,7 @@ private fun CreditsCard(
     onOpenGithub: () -> Unit,
     onDonate: () -> Unit,
 ) {
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1309,10 +1397,10 @@ private fun CreditsCard(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(onClick = onOpenGithub, shape = RoundedCornerShape(16.dp)) {
+                OutlinedButton(onClick = onOpenGithub, shape = RoundedCornerShape(8.dp)) {
                     Text("Open GitHub")
                 }
-                Button(onClick = onDonate, shape = RoundedCornerShape(16.dp)) {
+                Button(onClick = onDonate, shape = RoundedCornerShape(8.dp)) {
                     Text("Donate")
                 }
             }
@@ -1325,7 +1413,7 @@ private fun JobCard(
     job: FulfillmentJob,
     onRun: () -> Unit,
 ) {
-    ElevatedCard(shape = RoundedCornerShape(24.dp)) {
+    ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1369,7 +1457,7 @@ private fun JobCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
             ) {
-                OutlinedButton(onClick = onRun, shape = RoundedCornerShape(16.dp)) {
+                OutlinedButton(onClick = onRun, shape = RoundedCornerShape(8.dp)) {
                     Icon(Icons.Outlined.PlayArrow, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
                     Text("Run Again")
@@ -1389,7 +1477,7 @@ private fun StatusBadge(status: JobStatus) {
         JobStatus.QUEUED -> Color(0xFF1D2630) to Color(0xFFB6D6F9)
     }
 
-    Surface(color = bg, shape = RoundedCornerShape(999.dp)) {
+    Surface(color = bg, shape = RoundedCornerShape(6.dp)) {
         Text(
             status.name.replace('_', ' '),
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),

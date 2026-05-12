@@ -1,4 +1,20 @@
 .gradle/
 build/
-local.properties
 app/build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Signing / local secrets
+*.jks
+*.keystore
+keystore.properties
+
+# Logs
+*.log
