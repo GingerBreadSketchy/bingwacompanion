@@ -1,0 +1,52 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="315"
+                android:startColor="@color/bingwa_icon_bg_start"
+                android:centerColor="@color/bingwa_icon_bg_mid"
+                android:endColor="@color/bingwa_icon_bg_end" />
+        </shape>
+    </item>
+
+    <item
+        android:width="116dp"
+        android:height="116dp"
+        android:gravity="top|end"
+        android:right="-22dp"
+        android:top="-24dp">
+        <shape android:shape="oval">
+            <gradient
+                android:angle="0"
+                android:startColor="#2AFFF7DA"
+                android:endColor="#00FFF7DA" />
+        </shape>
+    </item>
+
+    <item
+        android:width="96dp"
+        android:height="96dp"
+        android:bottom="-18dp"
+        android:gravity="bottom|start"
+        android:left="-16dp">
+        <shape android:shape="oval">
+            <gradient
+                android:angle="90"
+                android:startColor="#1FF0A92E"
+                android:endColor="#00F0A92E" />
+        </shape>
+    </item>
+
+    <item
+        android:left="16dp"
+        android:top="14dp"
+        android:right="16dp"
+        android:bottom="14dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="28dp" />
+            <stroke
+                android:width="1dp"
+                android:color="#12FFF7DA" />
+        </shape>
+    </item>
+</layer-list>

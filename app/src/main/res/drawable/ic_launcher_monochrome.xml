@@ -1,0 +1,77 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:left="22dp"
+        android:top="22dp"
+        android:right="22dp"
+        android:bottom="22dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="30dp" />
+            <solid android:color="#00000000" />
+            <stroke
+                android:width="2dp"
+                android:color="@color/bingwa_icon_themed" />
+        </shape>
+    </item>
+
+    <item
+        android:left="28dp"
+        android:top="28dp"
+        android:right="28dp"
+        android:bottom="28dp">
+        <rotate android:fromDegrees="45">
+            <shape android:shape="rectangle">
+                <corners android:radius="18dp" />
+                <solid android:color="#00000000" />
+                <stroke
+                    android:width="2dp"
+                    android:color="@color/bingwa_icon_themed" />
+            </shape>
+        </rotate>
+    </item>
+
+    <item
+        android:left="34dp"
+        android:top="48dp"
+        android:right="34dp"
+        android:bottom="48dp">
+        <rotate android:fromDegrees="-24">
+            <shape android:shape="rectangle">
+                <corners android:radius="16dp" />
+                <solid android:color="@color/bingwa_icon_themed" />
+            </shape>
+        </rotate>
+    </item>
+
+    <item
+        android:width="14dp"
+        android:height="14dp"
+        android:gravity="center"
+        android:right="16dp"
+        android:top="2dp">
+        <shape android:shape="oval">
+            <solid android:color="@color/bingwa_icon_themed" />
+        </shape>
+    </item>
+
+    <item
+        android:left="46dp"
+        android:top="56dp"
+        android:right="60dp"
+        android:bottom="56dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="@color/bingwa_icon_themed" />
+        </shape>
+    </item>
+
+    <item
+        android:left="60dp"
+        android:top="72dp"
+        android:right="46dp"
+        android:bottom="40dp">
+        <shape android:shape="rectangle">
+            <corners android:radius="6dp" />
+            <solid android:color="@color/bingwa_icon_themed" />
+        </shape>
+    </item>
+</layer-list>

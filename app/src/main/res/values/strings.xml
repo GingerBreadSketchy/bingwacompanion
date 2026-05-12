@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Bingwa Companion</string>
+    <string name="accessibility_service_name">Bingwa USSD Automation Service</string>
+</resources>
