@@ -26,6 +26,9 @@ This project is a clean-room Android companion built to support a Bingwa fulfill
 - Launches USSD automatically
 - Uses an accessibility service to observe dialogs and send replies when configured
 - Works with dual-SIM slot hints where supported by the device
+- Supports swipe navigation across the main app pages
+- Lets you clear purchase history from the dashboard
+- Keeps fulfillment history cleaner by showing only relevant USSD and status details
 
 ## Tech Stack
 
@@ -43,7 +46,7 @@ This project is a clean-room Android companion built to support a Bingwa fulfill
 - Package name: `ke.co.bingwa.companion`
 - Minimum Android version: `26`
 - Target SDK: `35`
-- Current version: `0.1.0`
+- Current release: `v2`
 - Persistence: `SharedPreferences` + `kotlinx.serialization`
 - Automation path: `BroadcastReceiver` + `ForegroundService` + `AccessibilityService`
 
@@ -55,7 +58,7 @@ This project is a clean-room Android companion built to support a Bingwa fulfill
 4. A matching active offer is selected from the local catalog.
 5. A fulfillment job is queued.
 6. The app launches the generated USSD code.
-7. The accessibility service tracks the USSD dialog and can auto-reply where needed.
+7. The accessibility service tracks the USSD dialog, filters unrelated screen noise, and can auto-reply where needed.
 
 ## Default Offer Support
 
@@ -101,6 +104,13 @@ app/build/outputs/apk/debug/app-debug.apk
 ## Releases
 
 Each public release includes a downloadable Android APK.
+
+The current `v2` release includes:
+
+- Swipe navigation between the main pages
+- A `Clear History` action for purchase records
+- Cleaner purchase history entries and transcript previews
+- Improved accessibility logging focused on real USSD dialog content
 
 If you just want to install the app, open the Releases page and download the latest APK asset.
 
