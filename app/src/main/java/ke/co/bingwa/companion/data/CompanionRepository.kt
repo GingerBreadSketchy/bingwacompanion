@@ -67,6 +67,10 @@ class CompanionRepository(context: Context) {
         encode("jobs", ListSerializer(FulfillmentJob.serializer()), jobs.sortedByDescending { it.createdAt })
     }
 
+    fun clearJobs() {
+        saveJobs(emptyList())
+    }
+
     fun enqueueJob(job: FulfillmentJob) {
         val jobs = getJobs().toMutableList()
         jobs.removeAll { it.id == job.id }

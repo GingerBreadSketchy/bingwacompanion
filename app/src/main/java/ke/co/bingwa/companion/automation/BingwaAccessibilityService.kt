@@ -26,21 +26,21 @@ class BingwaAccessibilityService : AccessibilityService() {
             return
         }
 
-        val root = rootInActiveWindow ?: event?.source ?: return
-        val texts = collectTexts(root).distinct().filter { it.isNotBlank() }
+        val source = event?.source
+        val activeRoot = rootInActiveWindow
+        val packageName = resolvePackageName(event, source, activeRoot) ?: return
+        val root = activeRoot?.takeIf { it.packageName?.toString() == packageName } ?: source ?: return
+        val texts = collectTexts(root)
+            .map(::normalizeText)
+            .distinct()
+            .filter { it.isNotBlank() }
         if (texts.isEmpty()) return
 
-        val flattened = texts.joinToString(" | ")
-        if (job.transcript.lastOrNull() != flattened) {
-            repository.updateJob(job.id) {
-                it.copy(
-                    updatedAt = System.currentTimeMillis(),
-                    transcript = it.transcript + flattened,
-                )
-            }
-        }
+        if (!shouldProcessPackage(packageName, texts)) return
 
-        val lowered = flattened.lowercase(Locale.getDefault())
+        summarizeWindowText(texts)?.let { appendTranscript(job.id, it) }
+
+        val lowered = texts.joinToString(" | ").lowercase(Locale.getDefault())
         if (containsSuccess(lowered)) {
             repository.updateJob(job.id) {
                 it.copy(
@@ -94,6 +94,95 @@ class BingwaAccessibilityService : AccessibilityService() {
         return values
     }
 
+    private fun resolvePackageName(
+        event: AccessibilityEvent?,
+        source: AccessibilityNodeInfo?,
+        activeRoot: AccessibilityNodeInfo?,
+    ): String? {
+        return listOfNotNull(
+            source?.packageName?.toString(),
+            event?.packageName?.toString(),
+            activeRoot?.packageName?.toString(),
+        ).firstOrNull { it.isNotBlank() }
+    }
+
+    private fun shouldProcessPackage(packageName: String, texts: List<String>): Boolean {
+        val loweredPackage = packageName.lowercase(Locale.getDefault())
+        if (loweredPackage == this.packageName.lowercase(Locale.getDefault())) {
+            return false
+        }
+
+        if (
+            loweredPackage.contains("launcher") ||
+            loweredPackage.contains("systemui") ||
+            loweredPackage.contains("settings")
+        ) {
+            return false
+        }
+
+        if (
+            loweredPackage.contains("phone") ||
+            loweredPackage.contains("dialer") ||
+            loweredPackage.contains("telecom") ||
+            loweredPackage.contains("incall") ||
+            loweredPackage.contains("callui")
+        ) {
+            return true
+        }
+
+        val combined = texts.joinToString(" ").lowercase(Locale.getDefault())
+        return combined.contains("ussd") ||
+            combined.contains("mmi") ||
+            containsSuccess(combined) ||
+            containsFailure(combined)
+    }
+
+    private fun summarizeWindowText(texts: List<String>): String? {
+        val relevant = texts.filter(::isRelevantTranscriptText).take(4)
+        if (relevant.isEmpty()) return null
+
+        val summary = relevant.joinToString(" | ")
+        return if (summary.length <= MAX_TRANSCRIPT_ENTRY_LENGTH) {
+            summary
+        } else {
+            summary.take(MAX_TRANSCRIPT_ENTRY_LENGTH - 1).trimEnd() + "…"
+        }
+    }
+
+    private fun isRelevantTranscriptText(text: String): Boolean {
+        val lowered = text.lowercase(Locale.getDefault())
+        return lowered.contains("ussd") ||
+            lowered.contains("reply") ||
+            lowered.contains("send") ||
+            lowered.contains("cancel") ||
+            lowered.contains("dismiss") ||
+            lowered.contains("ok") ||
+            lowered.contains("yes") ||
+            lowered.contains("sawa") ||
+            lowered.contains("confirm") ||
+            lowered.contains("input") ||
+            lowered.contains("enter") ||
+            lowered.contains("bundle") ||
+            containsSuccess(lowered) ||
+            containsFailure(lowered)
+    }
+
+    private fun normalizeText(value: String): String {
+        return value.replace(Regex("\\s+"), " ").trim()
+    }
+
+    private fun appendTranscript(jobId: String, line: String) {
+        val current = repository.getJob(jobId) ?: return
+        if (current.transcript.lastOrNull() == line) return
+
+        repository.updateJob(jobId) {
+            it.copy(
+                updatedAt = System.currentTimeMillis(),
+                transcript = it.transcript + line,
+            )
+        }
+    }
+
     private fun findEditable(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
         if (node.isEditable) return node
         for (index in 0 until node.childCount) {
@@ -133,5 +222,9 @@ class BingwaAccessibilityService : AccessibilityService() {
         return listOf("failed", "error", "insufficient", "invalid", "try again later", "cancelled").any {
             message.contains(it)
         }
+    }
+
+    companion object {
+        private const val MAX_TRANSCRIPT_ENTRY_LENGTH = 220
     }
 }

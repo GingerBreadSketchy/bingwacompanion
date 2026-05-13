@@ -29,6 +29,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -66,10 +68,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -251,6 +255,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             ContextCompat.startForegroundService(context, intent)
         }
     }
+
+    fun clearPurchaseHistory() {
+        repository.clearJobs()
+        refresh()
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -278,6 +287,13 @@ class MainActivity : ComponentActivity() {
                         HomeTab("Detection", Icons.Outlined.DocumentScanner),
                         HomeTab("Bundles", Icons.Outlined.Layers),
                     )
+                }
+                val pagerState = rememberPagerState(initialPage = currentTab) { tabs.size }
+                val pagerScope = rememberCoroutineScope()
+                LaunchedEffect(pagerState.currentPage) {
+                    if (currentTab != pagerState.currentPage) {
+                        currentTab = pagerState.currentPage
+                    }
                 }
 
                 val filteredOffers by remember(uiState.offers, catalogSearch, catalogTypeFilter) {
@@ -330,8 +346,13 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 tabs.forEachIndexed { index, tab ->
                                     NavigationBarItem(
-                                        selected = index == currentTab,
-                                        onClick = { currentTab = index },
+                                        selected = index == pagerState.currentPage,
+                                        onClick = {
+                                            currentTab = index
+                                            pagerScope.launch {
+                                                pagerState.animateScrollToPage(index)
+                                            }
+                                        },
                                         icon = {
                                             Icon(tab.icon, contentDescription = tab.label)
                                         },
@@ -341,174 +362,193 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                     ) { padding ->
-                        when (currentTab) {
-                            0 -> TabContent(modifier = Modifier.padding(padding)) {
-                                item {
-                                    HeroCard(
-                                        jobCount = uiState.jobs.size,
-                                        activeOffers = uiState.offers.count { it.active && it.ussdCode.isNotBlank() },
-                                        successCount = uiState.jobs.count { it.status == JobStatus.SUCCESS },
-                                        delaySeconds = uiState.settings.fulfillmentDelaySeconds,
-                                    )
-                                }
-                                item {
-                                    HowItWorksCard()
-                                }
-                                if (uiState.jobs.isEmpty()) {
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(padding),
+                        ) { page ->
+                            when (page) {
+                                0 -> TabContent {
                                     item {
-                                        EmptyJobsCard()
-                                    }
-                                } else {
-                                    items(uiState.jobs, key = { it.id }) { job ->
-                                        JobCard(
-                                            job = job,
-                                            onRun = { viewModel.runJob(context, job.id) },
+                                        HeroCard(
+                                            jobCount = uiState.jobs.size,
+                                            activeOffers = uiState.offers.count { it.active && it.ussdCode.isNotBlank() },
+                                            successCount = uiState.jobs.count { it.status == JobStatus.SUCCESS },
+                                            delaySeconds = uiState.settings.fulfillmentDelaySeconds,
                                         )
                                     }
-                                }
-                                item {
-                                    CreditsCard(
-                                        onOpenGithub = {
-                                            startActivity(
-                                                Intent(
-                                                    Intent.ACTION_VIEW,
-                                                    Uri.parse("https://github.com/GingerBreadSketchy"),
-                                                ),
+                                    item {
+                                        HowItWorksCard()
+                                    }
+                                    item {
+                                        SectionHeader(
+                                            title = "Purchase History",
+                                            subtitle = "Recent payment matches and fulfillment attempts.",
+                                            trailingLabel = if (uiState.jobs.isNotEmpty()) "Clear History" else null,
+                                            onTrailingClick = if (uiState.jobs.isNotEmpty()) {
+                                                { viewModel.clearPurchaseHistory() }
+                                            } else {
+                                                null
+                                            },
+                                        )
+                                    }
+                                    if (uiState.jobs.isEmpty()) {
+                                        item {
+                                            EmptyJobsCard()
+                                        }
+                                    } else {
+                                        items(uiState.jobs, key = { it.id }) { job ->
+                                            JobCard(
+                                                job = job,
+                                                onRun = { viewModel.runJob(context, job.id) },
                                             )
-                                        },
-                                        onDonate = {
-                                            startActivity(
-                                                Intent(
-                                                    Intent.ACTION_VIEW,
-                                                    Uri.parse("https://gingerpay.vercel.app"),
-                                                ),
-                                            )
-                                        },
-                                    )
-                                }
-                            }
-
-                            1 -> TabContent(modifier = Modifier.padding(padding)) {
-                                item {
-                                    PermissionCard(
-                                        smsGranted = hasPermission(Manifest.permission.RECEIVE_SMS),
-                                        callGranted = hasPermission(Manifest.permission.CALL_PHONE),
-                                        accessibilityEnabled = isAccessibilityEnabled(),
-                                        onGrantSms = {
-                                            smsPermissionLauncher.launch(
-                                                arrayOf(
-                                                    Manifest.permission.RECEIVE_SMS,
-                                                    Manifest.permission.READ_SMS,
-                                                    Manifest.permission.POST_NOTIFICATIONS,
-                                                ),
-                                            )
-                                        },
-                                        onGrantCall = {
-                                            callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
-                                        },
-                                        onOpenAccessibility = {
-                                            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                                        },
-                                    )
-                                }
-                                item {
-                                    CollapsibleToolsCard(
-                                        title = "Quick USSD Test",
-                                        subtitle = "Open this only when you want to test dialing on this phone.",
-                                        expanded = showTestLab,
-                                        onToggle = { showTestLab = !showTestLab },
-                                    ) {
-                                        TestLabCard(
-                                            ussdCode = testUssd,
-                                            message = testMessage,
-                                            preferredSimSlot = uiState.settings.preferredSimSlot,
-                                            onUssdChange = { testUssd = it },
-                                            onRun = { simSlot ->
-                                                val normalized = testUssd.trim()
-                                                if (normalized.isBlank()) {
-                                                    testMessage = "Enter a USSD code first."
-                                                } else {
-                                                    viewModel.runTestUssd(context, normalized, simSlot)
-                                                    val label = when (simSlot) {
-                                                        1 -> "SIM 1"
-                                                        2 -> "SIM 2"
-                                                        else -> "Auto"
-                                                    }
-                                                    testMessage = "Test launch sent using $label routing."
-                                                }
+                                        }
+                                    }
+                                    item {
+                                        CreditsCard(
+                                            onOpenGithub = {
+                                                startActivity(
+                                                    Intent(
+                                                        Intent.ACTION_VIEW,
+                                                        Uri.parse("https://github.com/GingerBreadSketchy"),
+                                                    ),
+                                                )
+                                            },
+                                            onDonate = {
+                                                startActivity(
+                                                    Intent(
+                                                        Intent.ACTION_VIEW,
+                                                        Uri.parse("https://gingerpay.vercel.app"),
+                                                    ),
+                                                )
                                             },
                                         )
                                     }
                                 }
-                            }
 
-                            2 -> TabContent(modifier = Modifier.padding(padding)) {
-                                item {
-                                    SettingsCard(
-                                        settings = uiState.settings,
-                                        onSaveSettings = viewModel::saveSettings,
-                                    )
+                                1 -> TabContent {
+                                    item {
+                                        PermissionCard(
+                                            smsGranted = hasPermission(Manifest.permission.RECEIVE_SMS),
+                                            callGranted = hasPermission(Manifest.permission.CALL_PHONE),
+                                            accessibilityEnabled = isAccessibilityEnabled(),
+                                            onGrantSms = {
+                                                smsPermissionLauncher.launch(
+                                                    arrayOf(
+                                                        Manifest.permission.RECEIVE_SMS,
+                                                        Manifest.permission.READ_SMS,
+                                                        Manifest.permission.POST_NOTIFICATIONS,
+                                                    ),
+                                                )
+                                            },
+                                            onGrantCall = {
+                                                callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
+                                            },
+                                            onOpenAccessibility = {
+                                                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                                            },
+                                        )
+                                    }
+                                    item {
+                                        CollapsibleToolsCard(
+                                            title = "Quick USSD Test",
+                                            subtitle = "Open this only when you want to test dialing on this phone.",
+                                            expanded = showTestLab,
+                                            onToggle = { showTestLab = !showTestLab },
+                                        ) {
+                                            TestLabCard(
+                                                ussdCode = testUssd,
+                                                message = testMessage,
+                                                preferredSimSlot = uiState.settings.preferredSimSlot,
+                                                onUssdChange = { testUssd = it },
+                                                onRun = { simSlot ->
+                                                    val normalized = testUssd.trim()
+                                                    if (normalized.isBlank()) {
+                                                        testMessage = "Enter a USSD code first."
+                                                    } else {
+                                                        viewModel.runTestUssd(context, normalized, simSlot)
+                                                        val label = when (simSlot) {
+                                                            1 -> "SIM 1"
+                                                            2 -> "SIM 2"
+                                                            else -> "Auto"
+                                                        }
+                                                        testMessage = "Test launch sent using $label routing."
+                                                    }
+                                                },
+                                            )
+                                        }
+                                    }
                                 }
-                            }
 
-                            else -> TabContent(modifier = Modifier.padding(padding)) {
-                                item {
-                                    CatalogToolsCard(
-                                        search = catalogSearch,
-                                        selectedType = catalogTypeFilter,
-                                        message = catalogMessage,
-                                        onSearchChange = { catalogSearch = it },
-                                        onTypeChange = { catalogTypeFilter = it },
-                                        onExport = {
-                                            exportLauncher.launch("bingwa-offers.json")
-                                        },
-                                        onImport = {
-                                            importLauncher.launch(arrayOf("application/json", "text/plain"))
-                                        },
-                                    )
-                                }
-                                item {
-                                    CollapsibleToolsCard(
-                                        title = "Add Your Own Bundle",
-                                        subtitle = "Open this only when you want to add a new bundle manually.",
-                                        expanded = showCustomOffer,
-                                        onToggle = { showCustomOffer = !showCustomOffer },
-                                    ) {
-                                        CustomOfferCard(
-                                            onAdd = viewModel::addOffer,
+                                2 -> TabContent {
+                                    item {
+                                        SettingsCard(
+                                            settings = uiState.settings,
+                                            onSaveSettings = viewModel::saveSettings,
                                         )
                                     }
                                 }
-                                item {
-                                    SectionHeader(
-                                        title = "Bundles",
-                                        subtitle = "Search your bundles, adjust USSD codes, or restore the built-in list.",
-                                        trailingLabel = "Restore Default List",
-                                        onTrailingClick = {
-                                            viewModel.resetOffers()
-                                            catalogMessage = "Default bundle list restored."
-                                        },
-                                    )
-                                }
-                                items(filteredOffers, key = { it.id }) { offer ->
-                                    OfferCard(
-                                        offer = offer,
-                                        expanded = expandedOfferId == offer.id,
-                                        onToggleExpand = {
-                                            expandedOfferId = if (expandedOfferId == offer.id) null else offer.id
-                                        },
-                                        onSave = viewModel::saveOffer,
-                                        onToggleActive = { viewModel.toggleOfferActive(offer.id) },
-                                        onRemove = if (offer.id.startsWith("custom_")) {
-                                            { viewModel.removeOffer(offer.id) }
-                                        } else {
-                                            null
-                                        },
-                                    )
-                                }
-                                if (filteredOffers.isEmpty()) {
+
+                                else -> TabContent {
                                     item {
-                                        EmptyCatalogCard()
+                                        CatalogToolsCard(
+                                            search = catalogSearch,
+                                            selectedType = catalogTypeFilter,
+                                            message = catalogMessage,
+                                            onSearchChange = { catalogSearch = it },
+                                            onTypeChange = { catalogTypeFilter = it },
+                                            onExport = {
+                                                exportLauncher.launch("bingwa-offers.json")
+                                            },
+                                            onImport = {
+                                                importLauncher.launch(arrayOf("application/json", "text/plain"))
+                                            },
+                                        )
+                                    }
+                                    item {
+                                        CollapsibleToolsCard(
+                                            title = "Add Your Own Bundle",
+                                            subtitle = "Open this only when you want to add a new bundle manually.",
+                                            expanded = showCustomOffer,
+                                            onToggle = { showCustomOffer = !showCustomOffer },
+                                        ) {
+                                            CustomOfferCard(
+                                                onAdd = viewModel::addOffer,
+                                            )
+                                        }
+                                    }
+                                    item {
+                                        SectionHeader(
+                                            title = "Bundles",
+                                            subtitle = "Search your bundles, adjust USSD codes, or restore the built-in list.",
+                                            trailingLabel = "Restore Default List",
+                                            onTrailingClick = {
+                                                viewModel.resetOffers()
+                                                catalogMessage = "Default bundle list restored."
+                                            },
+                                        )
+                                    }
+                                    items(filteredOffers, key = { it.id }) { offer ->
+                                        OfferCard(
+                                            offer = offer,
+                                            expanded = expandedOfferId == offer.id,
+                                            onToggleExpand = {
+                                                expandedOfferId = if (expandedOfferId == offer.id) null else offer.id
+                                            },
+                                            onSave = viewModel::saveOffer,
+                                            onToggleActive = { viewModel.toggleOfferActive(offer.id) },
+                                            onRemove = if (offer.id.startsWith("custom_")) {
+                                                { viewModel.removeOffer(offer.id) }
+                                            } else {
+                                                null
+                                            },
+                                        )
+                                    }
+                                    if (filteredOffers.isEmpty()) {
+                                        item {
+                                            EmptyCatalogCard()
+                                        }
                                     }
                                 }
                             }
@@ -1413,6 +1453,8 @@ private fun JobCard(
     job: FulfillmentJob,
     onRun: () -> Unit,
 ) {
+    val transcriptPreview = remember(job.transcript) { buildTranscriptPreview(job.transcript) }
+
     ElevatedCard(shape = RoundedCornerShape(16.dp)) {
         Column(
             modifier = Modifier.padding(18.dp),
@@ -1445,12 +1487,14 @@ private fun JobCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (job.transcript.isNotEmpty()) {
+            if (transcriptPreview.isNotBlank()) {
                 HorizontalDivider()
                 Text(
-                    job.transcript.takeLast(3).joinToString("\n"),
+                    transcriptPreview,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 6,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Row(
@@ -1465,6 +1509,17 @@ private fun JobCard(
             }
         }
     }
+}
+
+private fun buildTranscriptPreview(entries: List<String>): String {
+    return entries
+        .flatMap { entry ->
+            entry.split('|')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+        }
+        .takeLast(4)
+        .joinToString("\n")
 }
 
 @Composable
