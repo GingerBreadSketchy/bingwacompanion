@@ -1,6 +1,10 @@
 .gradle/
+.kotlin/
 build/
 app/build/
+.cxx/
+captures/
+outputs/
 local.properties
 
 # Android Studio / IntelliJ
@@ -16,5 +20,19 @@ Thumbs.db
 *.keystore
 keystore.properties
 
-# Logs
+# Build artifacts / packages
+*.apk
+*.aab
+*.ap_
+*.aar
+*.idsig
+
+# Logs / reports / temp files
 *.log
+*.tmp
+*.temp
+hs_err_pid*
+replay_pid*
+
+# Misc local clutter
+*.orig

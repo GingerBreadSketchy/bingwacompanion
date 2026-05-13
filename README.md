@@ -101,6 +101,32 @@ The debug APK is generated at:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## Release Signing
+
+If you want users to install updates without uninstalling the previous version, every release APK must be signed with the same keystore.
+
+This project supports release signing through either a local `keystore.properties` file or environment variables.
+
+Example `keystore.properties`:
+
+```properties
+storeFile=release-keystore.jks
+storePassword=your-store-password
+keyAlias=your-key-alias
+keyPassword=your-key-password
+```
+
+Equivalent environment variables:
+
+```text
+BINGWA_KEYSTORE_FILE
+BINGWA_KEYSTORE_PASSWORD
+BINGWA_KEY_ALIAS
+BINGWA_KEY_PASSWORD
+```
+
+When these values are present, Gradle will use them for the `release` build. Keep the same keystore forever for all updates.
+
 ## Releases
 
 Each public release includes a downloadable Android APK.
